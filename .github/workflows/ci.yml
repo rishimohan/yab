@@ -120,7 +120,7 @@ jobs:
           else
             base="${{ github.event.before }}"
           fi
-          filter="$(python3 scripts/runs/tests_for.py --since "$base" 2>/dev/null)"
+          filter="AgentCLIMistypedTests|FieldPinnedMatchTests|AgentScreenshotRetinaTests|FieldCommandLeadTests|FieldRankTests|FieldSpaceURLTests|FieldPlacePriorityTests|NativeControlTests|CommandTests|MenuCommandCatalogTests"  # fork-only: the four upstream PRs' suites (tests_for.py is missing upstream, #875)
           echo "suites: ${filter:-none}"
           if [ -z "$filter" ] || [ "$filter" = all ]; then
             echo "Nothing narrower than the whole suite matched; the full-suite job covers it."
