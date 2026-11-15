@@ -75,7 +75,8 @@ final class FieldUnder: ObservableObject {
         self.off = off
         firstRow = store.bool(forKey: Key.firstRow)
         tabAsks = store.object(forKey: Key.tabAsks) as? Bool ?? true
-        tabs = store.object(forKey: Key.tabs) as? Bool ?? true
+        let tabs = store.object(forKey: Key.tabs) as? Bool ?? true
+        self.tabs = tabs
         // Open Tabs used to answer for pins too: off there, they stay off.
         pins = store.object(forKey: Key.pins) as? Bool ?? tabs
         pages = store.object(forKey: Key.pages) as? Bool ?? true
