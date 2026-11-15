@@ -7931,7 +7931,8 @@ final class Browser: NSObject, ObservableObject, Relaying {
                     url: url,
                     kind: .open,
                     tab: tab.id,
-                    space: space
+                    space: space,
+                    pinned: tab.pin != nil || tab.kept || tab.everywhere != nil
                 ))
             }
             .sorted { $0.touched > $1.touched }
