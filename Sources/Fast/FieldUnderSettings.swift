@@ -33,6 +33,7 @@ struct FieldUnderSettings: View {
                 .settingsAnchor("field-fallbacks")
         }
         Section {
+            matches("Pinned and Kept Tabs", "pin", $under.pins)
             matches("Open Tabs", "browser.tabs", $under.tabs)
             matches("History and Bookmarks", "clock", $under.pages)
             if prefs.engine != .custom {
