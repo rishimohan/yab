@@ -7509,6 +7509,11 @@ final class Browser: NSObject, ObservableObject, Relaying {
         let named = pasteNamed ?? (ending == nil && (text.count >= 3 || short)
             ? things.first.flatMap { thing -> Suggestion? in
                 guard thing.1 >= 2 else { return nil }
+                // A page open or visited that the words name comes first: a
+                // command leads over it only called by its whole name. "ins"
+                // and "insta" are Instagram before Inspect Element or Add
+                // Extension (its "install extension"), and Return goes there.
+                if !open.isEmpty || !places.isEmpty, !calledByName(thing.0, text) { return nil }
                 // Empty-window Close Tab now closes the window itself. Keep
                 // its row discoverable, but require picking it deliberately.
                 // A page's existing full-title Return behavior stays unchanged.
@@ -7931,7 +7936,8 @@ final class Browser: NSObject, ObservableObject, Relaying {
                     url: url,
                     kind: .open,
                     tab: tab.id,
-                    space: space
+                    space: space,
+                    pinned: tab.pin != nil || tab.kept || tab.everywhere != nil
                 ))
             }
             .sorted { $0.touched > $1.touched }
@@ -7949,6 +7955,17 @@ final class Browser: NSObject, ObservableObject, Relaying {
     /// holds the tab.
     func parkedOwner(of id: Tab.ID, in space: UUID) -> Browser? {
         ([self] + BrowserWindows.shared.browsers).first { $0.parked[space]?.tabs.contains { $0.id == id } == true }
+    }
+
+    /// The words are a thing's whole name, or one of its other whole names:
+    /// "add extension" or "install extension", not "inst".
+    private func calledByName(_ thing: Suggestion, _ words: String) -> Bool {
+        let typed = words.trimmingCharacters(in: .whitespaces)
+        if case .command(let command) = thing.kind { return command.matchesExactly(typed, in: self) }
+        if let id = thing.menuTargetID, let target = MenuCommands.targets(in: self).first(where: { $0.id == id }) {
+            return target.matchesExactly(typed)
+        }
+        return Command.normalizedName(thing.key) == Command.normalizedName(typed)
     }
 
     /// A tab of a space not on screen, in this window or another, taken from
