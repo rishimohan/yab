@@ -42,7 +42,7 @@ final class FieldUnder: ObservableObject {
 
     private enum Key {
         static let rows = "field.under", off = "field.under.off", firstRow = "field.firstRow", tabAsks = "field.tabAsks"
-        static let tabs = "field.match.tabs", pages = "field.match.pages", commands = "field.match.commands"
+        static let tabs = "field.match.tabs", pins = "field.match.pins", pages = "field.match.pages", commands = "field.match.commands"
     }
 
     @Published var rows: [String] { didSet { Store.settings.set(rows, forKey: Key.rows) } }
@@ -55,6 +55,9 @@ final class FieldUnder: ObservableObject {
     @Published var tabAsks: Bool { didSet { Store.settings.set(tabAsks, forKey: Key.tabAsks) } }
     /// The matches the field looks for as you type.
     @Published var tabs: Bool { didSet { Store.settings.set(tabs, forKey: Key.tabs) } }
+    /// Pinned and kept tabs, apart from the other open tabs: the words then
+    /// find the pages you are in now without the ones you keep (#877).
+    @Published var pins: Bool { didSet { Store.settings.set(pins, forKey: Key.pins) } }
     @Published var pages: Bool { didSet { Store.settings.set(pages, forKey: Key.pages) } }
     @Published var commands: Bool { didSet { Store.settings.set(commands, forKey: Key.commands) } }
 
@@ -73,6 +76,8 @@ final class FieldUnder: ObservableObject {
         firstRow = store.bool(forKey: Key.firstRow)
         tabAsks = store.object(forKey: Key.tabAsks) as? Bool ?? true
         tabs = store.object(forKey: Key.tabs) as? Bool ?? true
+        // Open Tabs used to answer for pins too: off there, they stay off.
+        pins = store.object(forKey: Key.pins) as? Bool ?? tabs
         pages = store.object(forKey: Key.pages) as? Bool ?? true
         commands = store.object(forKey: Key.commands) as? Bool ?? true
     }
@@ -97,7 +102,7 @@ final class FieldUnder: ObservableObject {
 
     /// Whether a match of this kind is looked for.
     func wants(_ offer: Suggestion) -> Bool {
-        if offer.opensHere || offer.tab != nil || offer.kind == .open { return tabs }
+        if offer.opensHere || offer.tab != nil || offer.kind == .open { return offer.pinned ? pins : tabs }
         if offer.menuTargetID != nil { return commands }
         switch offer.kind {
         case .visited: return pages

@@ -17,6 +17,9 @@ struct Suggestion: Identifiable, Equatable {
     var tab: UUID?
     /// The space whose row holds that tab, when it is not the one on screen.
     var space: UUID? = nil
+    /// That tab is pinned or kept (above the line), not only open: Settings ›
+    /// Field looks for these and the other open tabs separately.
+    var pinned = false
     /// The ordinary destination paired with a remote tab's explicit jump.
     /// It belongs to the Space asking for it, even if the site has a rule.
     var opensHere = false
