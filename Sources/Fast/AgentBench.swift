@@ -329,21 +329,34 @@ extension Bench {
         }
     }
 
-    /// A tab's picture as JPEG in base64, to go back in the answer itself.
-    func picture(_ web: any PageHandle, width: Double?, _ answer: @escaping ([String: Any]) -> Void) {
+    /// A tab's picture as JPEG in base64, to go back in the answer itself;
+    /// PNG at the screen's own pixels when asked for (`retina`).
+    func picture(_ web: any PageHandle, width: Double?, png: Bool = false, _ answer: @escaping ([String: Any]) -> Void) {
         let shot = PageShot(width: width.map { CGFloat($0) })
         web.snapshot(shot) { image, error in
             MainActor.assumeIsolated {
-                self.picture(image, error: error, width: width, answer)
+                self.picture(image, error: error, width: width, png: png, answer)
             }
         }
     }
 
     /// Encode only after a guarded caller has admitted the captured pixels.
-    func picture(_ image: NSImage?, error: Error?, width: Double?, _ answer: @escaping ([String: Any]) -> Void) {
-        guard let image, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+    func picture(_ image: NSImage?, error: Error?, width: Double?, png: Bool = false, _ answer: @escaping ([String: Any]) -> Void) {
+        guard let image, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let encoded = Self.encode(cg, width: width, png: png) else {
             answer(["error": error?.localizedDescription ?? "no picture"])
             return
+        }
+        answer(["data": encoded.0.base64EncodedString(), "width": encoded.1, "height": encoded.2, "format": png ? "png" : "jpeg"])
+    }
+
+    /// The picture's bytes and pixel size: JPEG drawn at the width asked
+    /// for, or PNG at every pixel there is, for reading small type or
+    /// checking a design (the screenshot tool's `retina`).
+    nonisolated static func encode(_ cg: CGImage, width: Double?, png: Bool) -> (Data, Int, Int)? {
+        if png {
+            let rep = NSBitmapImageRep(cgImage: cg)
+            return rep.representation(using: .png, properties: [:]).map { ($0, rep.pixelsWide, rep.pixelsHigh) }
         }
         // Drawn at the width asked for in pixels, not in points: a
         // Retina picture is four times the tokens for no more to read.
@@ -360,11 +373,7 @@ extension Bench {
                 rep = small
             }
         }
-        guard let jpeg = rep.representation(using: .jpeg, properties: [.compressionFactor: 0.7]) else {
-            answer(["error": "no picture"])
-            return
-        }
-        answer(["data": jpeg.base64EncodedString(), "width": rep.pixelsWide, "height": rep.pixelsHigh])
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.7]).map { ($0, rep.pixelsWide, rep.pixelsHigh) }
     }
 }
 
