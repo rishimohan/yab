@@ -3,8 +3,9 @@ import Testing
 @testable import Fast
 
 /// Three letters of a command's other words ("ins" of "install extension")
-/// put Add Extension above an open Instagram tab and the search. A command
-/// leads on a start of its own name, or once five letters are typed.
+/// put Add Extension above an open Instagram tab and the search. Over a
+/// page the list shows, open or visited, a command leads only called by its
+/// whole name; with no such page, as before.
 @MainActor @Suite(.serialized)
 struct FieldCommandLeadTests {
     private func withBrowser(_ body: (Browser, Tab) throws -> Void) rethrows {
@@ -65,12 +66,27 @@ struct FieldCommandLeadTests {
         }
     }
 
+    /// No open or visited page is named by these words: the command leads.
     @Test(arguments: ["add ext", "add extension", "install ext"])
-    func itsNameOrFiveLettersStillLead(words: String) {
+    func withNoPageNamedTheCommandStillLeads(words: String) {
         guard #available(macOS 15.4, *) else { return }
         withBrowser { browser, _ in
             browser.replaceTyped(words)
             #expect(isAddExtension(browser.offers.first), "\(words): \(browser.offers.map(\.key))")
+        }
+    }
+
+    /// With Open Tabs off in Settings › Field the Instagram tab isn't
+    /// shown, so it doesn't hold the command back. ("ins" still shows a
+    /// site, siteinspire.com, and that one does.)
+    @Test(arguments: ["inst"])
+    func aHiddenTabDoesntHoldACommandBack(words: String) throws {
+        try withBrowser { browser, tab in
+            FieldUnder.shared.tabs = false
+            browser.replaceTyped(words)
+            let offers = browser.offers
+            #expect(!offers.contains { $0.tab == tab.id }, "\(words): \(offers.map(\.key))")
+            #expect(isCommand(offers[browser.query.lead ?? 0]), "\(words): \(offers.map(\.key))")
         }
     }
 }

@@ -7513,7 +7513,10 @@ final class Browser: NSObject, ObservableObject, Relaying {
                 // command leads over it only called by its whole name. "ins"
                 // and "insta" are Instagram before Inspect Element or Add
                 // Extension (its "install extension"), and Return goes there.
-                if !open.isEmpty || !places.isEmpty, !calledByName(thing.0, text) { return nil }
+                // Only rows the list shows count: with Open Tabs or History
+                // off in Settings › Field, a hidden tab doesn't hold it back.
+                let shown = open.contains(where: FieldUnder.shared.wants) || places.contains(where: FieldUnder.shared.wants)
+                if shown, !calledByName(thing.0, text) { return nil }
                 // Empty-window Close Tab now closes the window itself. Keep
                 // its row discoverable, but require picking it deliberately.
                 // A page's existing full-title Return behavior stays unchanged.
