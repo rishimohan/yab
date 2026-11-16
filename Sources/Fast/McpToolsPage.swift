@@ -255,7 +255,7 @@ extension Mcp {
             return done(got) { text("\(got["title"] ?? "") · \(got["url"] ?? "")" + (hidden > 0 ? "\n(\(hidden) piece\(hidden == 1 ? "" : "s") of text a person can't see left out)" : "") + "\n\n\(got["text"] ?? "")") }
         },
         McpTool("screenshot", .read("Take Screenshot"),
-                "A picture of a tab as it is now, for when the snapshot is not enough. Unavailable after card details have been entered in that tab; use snapshot instead. retina: true for a PNG at the screen's own pixels, to read small type or check a design (about four times the tokens).",
+                "A picture of a tab as it is now, for when the snapshot is not enough. Unavailable after card details have been entered in that tab; use snapshot instead. retina: true for a PNG at the screen's own pixels, up to 2560 on its long side, to read small type or check a design (about four times the tokens).",
                 ["tab": tab, "retina": ["type": "boolean"]],
                 required: ["tab"]) { name, input, id in
             let retina = input["retina"] as? Bool == true

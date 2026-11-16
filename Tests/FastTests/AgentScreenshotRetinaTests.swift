@@ -25,4 +25,34 @@ struct AgentScreenshotRetinaTests {
         #expect((wide, high) == (2560, 1600))
         #expect(data.starts(with: [0x89, 0x50, 0x4E, 0x47]))
     }
+
+    /// A 5K tab: the long side comes down to 2560, the same shape.
+    @Test func retinaCapsTheLongSide() throws {
+        let (data, wide, high) = try #require(Bench.encode(try image(width: 5120, height: 2880), width: nil, png: true))
+        #expect((wide, high) == (2560, 1440))
+        #expect(data.starts(with: [0x89, 0x50, 0x4E, 0x47]))
+        let (_, tallWide, tallHigh) = try #require(Bench.encode(try image(width: 1600, height: 4000), width: nil, png: true))
+        #expect((tallWide, tallHigh) == (1024, 2560))
+    }
+
+    /// Pixels that don't compress (a photo, noise) come down until the
+    /// bytes fit the cap a client takes.
+    @Test func retinaCapsTheBytes() throws {
+        let (wide, high) = (2560, 1600)
+        var pixels = [UInt8](repeating: 255, count: wide * high * 4)
+        var seed: UInt64 = 0x9E37_79B9_7F4A_7C15
+        for i in pixels.indices where i % 4 != 3 {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            pixels[i] = UInt8(truncatingIfNeeded: seed >> 56)
+        }
+        let cg = try pixels.withUnsafeMutableBytes { buffer in
+            let context = try #require(CGContext(data: buffer.baseAddress, width: wide, height: high, bitsPerComponent: 8, bytesPerRow: wide * 4,
+                                                 space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            return try #require(context.makeImage())
+        }
+        let (data, gotWide, gotHigh) = try #require(Bench.encode(cg, width: nil, png: true))
+        #expect(data.count <= Bench.retinaBytes, "\(data.count) bytes at \(gotWide)×\(gotHigh)")
+        #expect(gotWide < wide && gotWide >= 1024)
+        #expect(abs(Double(gotWide) / Double(gotHigh) - 1.6) < 0.01)
+    }
 }

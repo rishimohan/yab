@@ -350,30 +350,55 @@ extension Bench {
         answer(["data": encoded.0.base64EncodedString(), "width": encoded.1, "height": encoded.2, "format": png ? "png" : "jpeg"])
     }
 
+    /// A retina PNG's longest side, in pixels.
+    nonisolated static let retinaSide = 2560
+    /// A retina PNG's most bytes: 5 MB once in base64, the most an image
+    /// the model reads may be.
+    nonisolated static let retinaBytes = 3_750_000
+
     /// The picture's bytes and pixel size: JPEG drawn at the width asked
-    /// for, or PNG at every pixel there is, for reading small type or
+    /// for, or PNG at the screen's own pixels, for reading small type or
     /// checking a design (the screenshot tool's `retina`).
     nonisolated static func encode(_ cg: CGImage, width: Double?, png: Bool) -> (Data, Int, Int)? {
         if png {
-            let rep = NSBitmapImageRep(cgImage: cg)
-            return rep.representation(using: .png, properties: [:]).map { ($0, rep.pixelsWide, rep.pixelsHigh) }
+            // A 5K tab's every pixel is an image a client refuses: the long
+            // side at most retinaSide, and smaller again until the bytes
+            // fit, down to the 1024 the default picture has.
+            var side = min(max(cg.width, cg.height), retinaSide)
+            while true {
+                let rep = scaled(cg, longSide: side)
+                guard let data = rep.representation(using: .png, properties: [:]) else { return nil }
+                if data.count <= retinaBytes || side <= 1024 { return (data, rep.pixelsWide, rep.pixelsHigh) }
+                side = max(1024, side * 3 / 4)
+            }
         }
         // Drawn at the width asked for in pixels, not in points: a
         // Retina picture is four times the tokens for no more to read.
         var rep = NSBitmapImageRep(cgImage: cg)
         if let width, rep.pixelsWide > Int(width) {
-            let height = Int(Double(rep.pixelsHigh) * width / Double(rep.pixelsWide))
-            if let small = NSBitmapImageRep(
-                bitmapDataPlanes: nil, pixelsWide: Int(width), pixelsHigh: height, bitsPerSample: 8,
-                samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
-                bytesPerRow: 0, bitsPerPixel: 0
-            ), let context = NSGraphicsContext(bitmapImageRep: small) {
-                context.cgContext.interpolationQuality = .high
-                context.cgContext.draw(cg, in: CGRect(x: 0, y: 0, width: Int(width), height: height))
-                rep = small
-            }
+            rep = drawn(cg, wide: Int(width), high: Int(Double(rep.pixelsHigh) * width / Double(rep.pixelsWide))) ?? rep
         }
         return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.7]).map { ($0, rep.pixelsWide, rep.pixelsHigh) }
+    }
+
+    /// The picture with its longer side at most `longSide` pixels.
+    nonisolated private static func scaled(_ cg: CGImage, longSide: Int) -> NSBitmapImageRep {
+        let long = max(cg.width, cg.height)
+        guard long > longSide else { return NSBitmapImageRep(cgImage: cg) }
+        let scale = Double(longSide) / Double(long)
+        return drawn(cg, wide: max(1, Int((Double(cg.width) * scale).rounded())), high: max(1, Int((Double(cg.height) * scale).rounded())))
+            ?? NSBitmapImageRep(cgImage: cg)
+    }
+
+    nonisolated private static func drawn(_ cg: CGImage, wide: Int, high: Int) -> NSBitmapImageRep? {
+        guard let small = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: wide, pixelsHigh: high, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: small) else { return nil }
+        context.cgContext.interpolationQuality = .high
+        context.cgContext.draw(cg, in: CGRect(x: 0, y: 0, width: wide, height: high))
+        return small
     }
 }
 
