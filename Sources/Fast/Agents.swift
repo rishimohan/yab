@@ -5034,17 +5034,6 @@ enum Shell {
 /// `yab agent "task"`: a task started in the running browser, followed here
 /// the way `aside "…"` is.
 enum AgentCLI {
-    /// The word someone meant as a command, when the words read as a
-    /// mistyped one rather than a task: one bare word (`yab tabs`), or a
-    /// help flag after words (`yab feedback --help`). Nil for a task.
-    /// A task is a sentence, so a one-word task is refused with the rest.
-    static func mistyped(_ words: [String]) -> String? {
-        guard let first = words.first else { return nil }
-        if words.dropFirst().contains(where: { $0 == "-h" || $0 == "--help" }) { return first }
-        if words.count == 1, first.range(of: "^[a-z][a-z0-9-]*$", options: .regularExpression) != nil { return first }
-        return nil
-    }
-
     static func run(_ args: [String]) -> Never {
         // Each step as it happens, even into a pipe.
         setvbuf(stdout, nil, _IOLBF, 0)
@@ -5103,10 +5092,6 @@ enum AgentCLI {
                 exit(2)
             default: words.append(arg)
             }
-        }
-        if let word = mistyped(words) {
-            FileHandle.standardError.write(Data("yab: no command \(word); see yab help. A task is a sentence: yab \"what to do\"\n".utf8))
-            exit(2)
         }
         let prompt = words.joined(separator: " ")
         guard !prompt.isEmpty else {
