@@ -342,9 +342,12 @@ extension Bench {
 
     /// Encode only after a guarded caller has admitted the captured pixels.
     func picture(_ image: NSImage?, error: Error?, width: Double?, png: Bool = false, _ answer: @escaping ([String: Any]) -> Void) {
-        guard let image, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let encoded = Self.encode(cg, width: width, png: png) else {
+        guard let image, let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             answer(["error": error?.localizedDescription ?? "no picture"])
+            return
+        }
+        guard let encoded = Self.encode(cg, width: width, png: png) else {
+            answer(["error": png ? "no retina picture fits 2560 pixels and 3.75 MB; take it without retina" : "no picture"])
             return
         }
         answer(["data": encoded.0.base64EncodedString(), "width": encoded.1, "height": encoded.2, "format": png ? "png" : "jpeg"])
@@ -360,18 +363,7 @@ extension Bench {
     /// for, or PNG at the screen's own pixels, for reading small type or
     /// checking a design (the screenshot tool's `retina`).
     nonisolated static func encode(_ cg: CGImage, width: Double?, png: Bool) -> (Data, Int, Int)? {
-        if png {
-            // A 5K tab's every pixel is an image a client refuses: the long
-            // side at most retinaSide, and smaller again until the bytes
-            // fit, down to the 1024 the default picture has.
-            var side = min(max(cg.width, cg.height), retinaSide)
-            while true {
-                let rep = scaled(cg, longSide: side)
-                guard let data = rep.representation(using: .png, properties: [:]) else { return nil }
-                if data.count <= retinaBytes || side <= 1024 { return (data, rep.pixelsWide, rep.pixelsHigh) }
-                side = max(1024, side * 3 / 4)
-            }
-        }
+        if png { return retina(cg) }
         // Drawn at the width asked for in pixels, not in points: a
         // Retina picture is four times the tokens for no more to read.
         var rep = NSBitmapImageRep(cgImage: cg)
@@ -381,16 +373,34 @@ extension Bench {
         return rep.representation(using: .jpeg, properties: [.compressionFactor: 0.7]).map { ($0, rep.pixelsWide, rep.pixelsHigh) }
     }
 
-    /// The picture with its longer side at most `longSide` pixels.
-    nonisolated private static func scaled(_ cg: CGImage, longSide: Int) -> NSBitmapImageRep {
+    /// The retina PNG, only ever within both caps: a 5K tab's every pixel
+    /// is an image a client refuses. The long side at most `side`, and
+    /// smaller again until the bytes fit, down to the `least` the default
+    /// picture has. Nil when it can't be drawn smaller, or still doesn't
+    /// fit at `least`: never a PNG past either cap.
+    nonisolated static func retina(_ cg: CGImage, side: Int = retinaSide, bytes: Int = retinaBytes, least: Int = 1024,
+                                   draw: (CGImage, Int, Int) -> NSBitmapImageRep? = drawn) -> (Data, Int, Int)? {
+        var long = min(max(cg.width, cg.height), side)
+        while true {
+            guard let rep = scaled(cg, longSide: long, draw: draw),
+                  max(rep.pixelsWide, rep.pixelsHigh) <= long,
+                  let data = rep.representation(using: .png, properties: [:]) else { return nil }
+            if data.count <= bytes { return (data, rep.pixelsWide, rep.pixelsHigh) }
+            guard long > least else { return nil }
+            long = max(least, long * 3 / 4)
+        }
+    }
+
+    /// The picture with its longer side at most `longSide` pixels; nil when
+    /// it had to be drawn smaller and couldn't be.
+    nonisolated private static func scaled(_ cg: CGImage, longSide: Int, draw: (CGImage, Int, Int) -> NSBitmapImageRep?) -> NSBitmapImageRep? {
         let long = max(cg.width, cg.height)
         guard long > longSide else { return NSBitmapImageRep(cgImage: cg) }
         let scale = Double(longSide) / Double(long)
-        return drawn(cg, wide: max(1, Int((Double(cg.width) * scale).rounded())), high: max(1, Int((Double(cg.height) * scale).rounded())))
-            ?? NSBitmapImageRep(cgImage: cg)
+        return draw(cg, max(1, Int((Double(cg.width) * scale).rounded())), max(1, Int((Double(cg.height) * scale).rounded())))
     }
 
-    nonisolated private static func drawn(_ cg: CGImage, wide: Int, high: Int) -> NSBitmapImageRep? {
+    nonisolated static func drawn(_ cg: CGImage, wide: Int, high: Int) -> NSBitmapImageRep? {
         guard let small = NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: wide, pixelsHigh: high, bitsPerSample: 8,
             samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,

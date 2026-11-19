@@ -56,3 +56,46 @@ struct AgentScreenshotRetinaTests {
         #expect(abs(Double(gotWide) / Double(gotHigh) - 1.6) < 0.01)
     }
 }
+
+/// No retina PNG past either cap, on any path: still too many bytes at the
+/// least side, or a picture that couldn't be drawn smaller, is no picture.
+struct AgentScreenshotRetinaBoundsTests {
+    private func noise(width: Int, height: Int) throws -> CGImage {
+        var pixels = [UInt8](repeating: 255, count: width * height * 4)
+        var seed: UInt64 = 0x9E37_79B9_7F4A_7C15
+        for i in pixels.indices where i % 4 != 3 {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            pixels[i] = UInt8(truncatingIfNeeded: seed >> 56)
+        }
+        return try pixels.withUnsafeMutableBytes { buffer in
+            let context = try #require(CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                                                 bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            return try #require(context.makeImage())
+        }
+    }
+
+    /// At the least side the bytes still don't fit: no picture, not one
+    /// past the cap.
+    @Test func overTheBytesAtTheLeastSideIsNoPicture() throws {
+        #expect(Bench.retina(try noise(width: 2000, height: 1250), bytes: 100_000) == nil)
+        // A picture already at or under the least side gets no exemption.
+        #expect(Bench.retina(try noise(width: 800, height: 500), bytes: 100_000) == nil)
+    }
+
+    /// Drawing smaller failed: the full-size picture used to go out instead.
+    @Test func undrawableIsNoPicture() throws {
+        let big = try noise(width: 3000, height: 1500)
+        #expect(Bench.retina(big, draw: { _, _, _ in nil }) == nil)
+        // A drawer that hands back more pixels than asked for is refused too.
+        #expect(Bench.retina(big, draw: { cg, _, _ in NSBitmapImageRep(cgImage: cg) }) == nil)
+    }
+
+    /// Whatever comes back is within both caps.
+    @Test(arguments: [(5120, 2880), (1600, 4000), (2560, 1600), (900, 600)])
+    func everyPictureIsWithinBothCaps(size: (Int, Int)) throws {
+        let (data, wide, high) = try #require(Bench.retina(try noise(width: size.0, height: size.1)))
+        #expect(max(wide, high) <= Bench.retinaSide)
+        #expect(data.count <= Bench.retinaBytes)
+    }
+}
