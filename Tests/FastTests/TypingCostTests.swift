@@ -263,8 +263,10 @@ private struct Plain {
         }
         let words = needle.count >= 3 ? needle.split(whereSeparator: \.isWhitespace).map { " " + $0 } : []
         func titled(_ visit: Visit) -> Double? {
-            guard !words.isEmpty, !visit.title.isEmpty else { return nil }
-            let title = " " + Wording.split(visit.title.lowercased()).joined(separator: " ")
+            // The title's words, then the path's (History.pathWords).
+            let all = Wording.split(visit.title.lowercased()) + History.pathWords(visit.key)
+            guard !words.isEmpty, !all.isEmpty else { return nil }
+            let title = " " + all.joined(separator: " ")
             return words.allSatisfy { title.contains($0) } ? 1 : nil
         }
         func frecency(_ visit: Visit) -> Double {

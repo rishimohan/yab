@@ -442,7 +442,10 @@ final class History: ObservableObject {
             room = visit.key.contains("/")
             ascii = host.utf8.allSatisfy { $0 < 0x80 }
             asciiKey = ascii && visit.key.utf8.allSatisfy { $0 < 0x80 }
-            title = " " + Wording.split(visit.title.lowercased()).joined(separator: " ")
+            // The words of its title, then of its path: "workflows" finds
+            // localhost/workspace/pika/workflows, as Arc finds a page by a
+            // word of its path, under the address's start.
+            title = " " + (Wording.split(visit.title.lowercased()) + History.pathWords(visit.key)).joined(separator: " ")
             asciiTitle = title.utf8.allSatisfy { $0 < 0x80 }
             sortScore = History.frecency(visit, now: now)
         }
@@ -1391,8 +1394,8 @@ final class History: ObservableObject {
         // a name turns "x" into example.com and netflix.com, which is not what
         // anybody meant by it.
         guard needle.inside else { return nil }
-        // Deliberately no match on the path. "blog" turning up six articles
-        // from three sites is not an answer to anything.
+        // A word of the path is matched as a title's is (`titled`), under
+        // the host: never the middle of one, "log" in /blog.
         if let bytes = needle.bytes, entry.ascii { return holds(entry.host, bytes) ? 2 : nil }
         return entry.host.contains(needle.text) ? 2 : nil
     }
@@ -1400,12 +1403,24 @@ final class History: ObservableObject {
     /// The sites the field knows from the start, as places are matched.
     private static let knownEntries = known.map { Entry(Visit(url: "", key: $0.0, title: "", count: 0, last: .distantPast)) }
 
+    /// The words of a key's path that read as words: not a long id
+    /// (ucsyuezv9hlfufyopbtnqefg), nor one with more digits than letters.
+    nonisolated static func pathWords(_ key: String) -> [Substring] {
+        guard let slash = key.firstIndex(of: "/") else { return [] }
+        return Wording.split(String(key[key.index(after: slash)...])).filter { word in
+            guard (2...20).contains(word.count) else { return false }
+            let letters = word.reduce(0) { $0 + ($1.isLetter ? 1 : 0) }
+            return letters > 0 && letters * 2 > word.count
+        }
+    }
+
     /// By what the page was called, once three letters say enough: every
-    /// word typed has to begin a word of the title, so "swift conc" finds
-    /// the article on Swift concurrency and "on" finds nothing. Ranked under
-    /// any match on the address, the address is what the field is for.
+    /// word typed has to begin a word of the title or of the path, so
+    /// "swift conc" finds the article on Swift concurrency and "on" finds
+    /// nothing. Ranked under any match on the address's start, the address
+    /// is what the field is for.
     private static func titled(_ entry: Entry, _ needle: Needle) -> Double? {
-        guard !needle.words.isEmpty, !entry.visit.title.isEmpty else { return nil }
+        guard !needle.words.isEmpty, entry.title.count > 1 else { return nil }
         if let words = needle.wordBytes, entry.asciiTitle {
             return words.allSatisfy { History.holds(entry.title, $0) } ? 1 : nil
         }
