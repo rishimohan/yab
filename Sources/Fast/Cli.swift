@@ -71,22 +71,57 @@ enum Cli {
     }
 
     /// The word someone meant as a command, when a line that reached no
-    /// command reads as a mistyped one rather than a task: one bare word
-    /// (`yab tabs`), or a help flag after words (`yab feedback --help`).
-    /// Nil for a task, and for the words the agent answers itself (`yab
-    /// list`, `yab stop ID`). Asked only of a bare `yab …` line: the words
-    /// after `yab agent` or `yab session resume ID` are the task's own, and
-    /// a one-word follow-up ("yes") is one.
+    /// command reads as a mistyped one rather than a task: a help flag after
+    /// words (`yab feedback --help`), or one bare word that no task is
+    /// written as, a joined name (`yab list-tabs`) or a command's near miss
+    /// (`yab sesion`, `yab stauts`). Any other single word is a task
+    /// (`yab continue`, `yab summarize`), whatever its case. Nil for a task,
+    /// and for the words the agent answers itself (`yab list`, `yab stop
+    /// ID`). Asked only of a bare `yab …` line: the words after `yab agent`
+    /// or `yab session resume ID` are the task's own, and a one-word
+    /// follow-up ("yes") is one.
     static func mistyped(_ args: [String]) -> String? {
         let words = unsocketed(args)
-        guard let first = words.first, !first.hasPrefix("-"), !agentWords.contains(first) else { return nil }
+        guard let first = words.first, !first.hasPrefix("-"), !agentWords.contains(first.lowercased()) else { return nil }
         if words.dropFirst().contains(where: { $0 == "-h" || $0 == "--help" }) { return first }
-        if words.count == 1, first.range(of: "^[a-z][a-z0-9-]*$", options: .regularExpression) != nil { return first }
+        guard words.count == 1 else { return nil }
+        let word = first.lowercased()
+        if word.range(of: "^[a-z][a-z0-9]*([-_][a-z0-9]+)+$", options: .regularExpression) != nil { return first }
+        if commandWords.contains(where: { nearMiss(word, of: $0) }) { return first }
         return nil
     }
 
     /// What `AgentCLI.run` answers itself as a first word, not as a task.
     private static let agentWords: Set = ["list", "stop", "steer", "queue", "memory"]
+
+    /// Every first word `command` or the agent answers, for near misses.
+    static let commandWords: Set = ["help", "version", "status", "quit", "serve", "import", "guide", "session",
+                                    "sessions", "memory", "skills", "skill", "every", "routines", "mail", "files",
+                                    "setup", "remove", "agent", "exec", "plugin", "list", "stop", "steer", "queue"]
+
+    /// A word one slip from `command` (two for a long one), and not it: a
+    /// letter added, dropped, changed or two swapped. Beside a short
+    /// command only a changed or swapped letter counts, so `email` stays a
+    /// task beside `mail`, and `save` beside `serve`.
+    static func nearMiss(_ word: String, of command: String) -> Bool {
+        guard word != command, word.count >= 3 else { return false }
+        let a = Array(word), b = Array(command)
+        let shorter = min(a.count, b.count)
+        let most = shorter >= 7 ? 2 : 1
+        guard shorter >= 5 ? abs(a.count - b.count) <= most : a.count == b.count else { return false }
+        // Edits, with a swap of two neighbors as one.
+        var d = [[Int]](repeating: [Int](repeating: 0, count: b.count + 1), count: a.count + 1)
+        for i in 0...a.count { d[i][0] = i }
+        for j in 0...b.count { d[0][j] = j }
+        for i in 1...a.count {
+            for j in 1...b.count {
+                let cost = a[i - 1] == b[j - 1] ? 0 : 1
+                d[i][j] = min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+                if i > 1, j > 1, a[i - 1] == b[j - 2], a[i - 2] == b[j - 1] { d[i][j] = min(d[i][j], d[i - 2][j - 2] + 1) }
+            }
+        }
+        return d[a.count][b.count] <= most
+    }
 
     static func run(_ args: [String]) -> Never {
         setvbuf(stdout, nil, _IOLBF, 0)

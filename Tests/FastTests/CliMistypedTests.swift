@@ -3,14 +3,21 @@ import Testing
 
 /// `yab WORD` with a word that is no command used to start an agent task.
 struct CliMistypedTests {
-    @Test(arguments: [["tabs"], ["feedback", "--help"], ["feedback", "-h"], ["open", "tabs", "--help"], ["list-tabs"],
-                      ["tabs", "--socket", "/tmp/yab.sock"]])
+    @Test(arguments: [["feedback", "--help"], ["feedback", "-h"], ["open", "tabs", "--help"], ["summarize", "--help"],
+                      // Joined names no task is written as.
+                      ["list-tabs"], ["list_tabs"], ["List-Tabs"], ["list-tabs", "--socket", "/tmp/yab.sock"],
+                      // A command's near misses, in any case.
+                      ["sesion"], ["stauts"], ["memroy"], ["Stauts"], ["lsit"], ["sessoins"], ["agents"], ["guides"]])
     func mistypedCommandIsNotATask(args: [String]) {
         #expect(Cli.mistyped(args) == args[0])
     }
 
     @Test(arguments: [["find the unread message from Alex in Slack"], ["summarize", "my", "tabs"],
-                      ["Summarize"], ["what's new?"], ["https://example.com"], [],
+                      // A one-word task, lowercase or not.
+                      ["continue"], ["Continue"], ["summarize"], ["Summarize"], ["tabs"], ["retry"],
+                      // Near a command's letters, but a word of its own.
+                      ["email"], ["save"], ["very"], ["hello"],
+                      ["what's new?"], ["https://example.com"], [],
                       // What the agent answers itself.
                       ["list"], ["stop", "a1b2"], ["steer", "a1b2", "slower"], ["memory"],
                       // A flag first is the task's own, or a mistake the agent names.
