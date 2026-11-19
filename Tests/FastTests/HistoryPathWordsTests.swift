@@ -55,6 +55,28 @@ import Testing
         #expect(history.completion(for: "studio", among: rows) == ".example")
     }
 
+    /// More pages with the words in their paths than rows to show, each
+    /// seen far more often: the site whose address begins with them is
+    /// still among the rows, and still the one the field finishes.
+    @Test func busyPathPagesDontPushOutTheAddressStart() {
+        var places = [visit("https://studio.example/", title: "Studio", count: 2)]
+        for page in ["upload", "library", "analytics", "comments", "settings", "earnings"] {
+            places.append(visit("https://other.example/studio/" + page, title: page.capitalized, count: 50))
+        }
+        let history = History(places)
+        let rows = history.suggestions(for: "studio", now: now)
+        #expect(rows.count == 5)
+        #expect(rows.contains { $0.key == "studio.example" })
+        #expect(history.completion(for: "studio", among: rows) == ".example")
+    }
+
+    /// A word written with escapes in the address is found as typed.
+    @Test func anEscapedWordIsFoundAsTyped() {
+        let history = History([visit("https://site.example/caf%C3%A9/menu", title: "Menu")])
+        #expect(history.suggestions(for: "café", now: now).map(\.key) == ["site.example/caf%c3%a9/menu"])
+        #expect(History.pathWords("site.example/caf%c3%a9/menu").map(String.init) == ["café", "menu"])
+    }
+
     /// Ids aren't words: a long one, or one more digits than letters.
     @Test func idsAreNotWords() {
         #expect(History.pathWords("studio.youtube.com/channel/ucsyuezv9hlfufyopbtnqefg/videos").map(String.init)

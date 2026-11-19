@@ -286,8 +286,16 @@ private struct Plain {
         }
         // As it was, and then by the address when even its length is the
         // same, where before it fell to the order of a dictionary.
-        return scored.sorted {
+        let sorted = scored.sorted {
             $0.1 != $1.1 ? $0.1 > $1.1 : $0.0.key.count != $1.0.key.count ? $0.0.key.count < $1.0.key.count : $0.0.key < $1.0.key
-        }.prefix(limit).map(\.0)
+        }.map(\.0)
+        var shown = Array(sorted.prefix(limit))
+        // The best place whose address begins with the words stays among
+        // them, the one the field finishes.
+        if limit > 0, !shown.contains(where: { $0.key.hasPrefix(needle) }), let start = sorted.first(where: { $0.key.hasPrefix(needle) }) {
+            if shown.count == limit { shown.removeLast() }
+            shown.append(start)
+        }
+        return shown
     }
 }

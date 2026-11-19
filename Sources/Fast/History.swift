@@ -1312,6 +1312,17 @@ final class History: ObservableObject {
                 if let made = offer(one.at) { offers.append(made) }
             }
         }
+        // A place whose address begins with the words is the one the field
+        // finishes (completion), so it stays among the few however often
+        // pages matched only by their titles' or paths' words were seen:
+        // "studio" is still studio.example with five busy pages under
+        // other.example/studio/. Looked for only when none is shown.
+        if limit > 0, !offers.contains(where: { $0.isPlace && $0.key.hasPrefix(needle) }),
+           let start = found.filter({ key($0.at).hasPrefix(needle) }).max(by: { better($1, $0) }),
+           let made = offer(start.at) {
+            if offers.count == limit { offers.removeLast() }
+            offers.append(made)
+        }
         self.asked = (needle, limit, now, offers)
         return offers
     }
@@ -1405,9 +1416,11 @@ final class History: ObservableObject {
 
     /// The words of a key's path that read as words: not a long id
     /// (ucsyuezv9hlfufyopbtnqefg), nor one with more digits than letters.
+    /// Escapes are read first: /caf%C3%A9 is the word café.
     nonisolated static func pathWords(_ key: String) -> [Substring] {
         guard let slash = key.firstIndex(of: "/") else { return [] }
-        return Wording.split(String(key[key.index(after: slash)...])).filter { word in
+        let path = String(key[key.index(after: slash)...])
+        return Wording.split((path.removingPercentEncoding ?? path).lowercased()).filter { word in
             guard (2...20).contains(word.count) else { return false }
             let letters = word.reduce(0) { $0 + ($1.isLetter ? 1 : 0) }
             return letters > 0 && letters * 2 > word.count
