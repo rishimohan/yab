@@ -70,6 +70,24 @@ import Testing
         #expect(history.completion(for: "studio", among: rows) == ".example")
     }
 
+    /// The site row kept is the best of them, a bookmarked page's weight
+    /// counted: here a page been to less, but bookmarked.
+    @Test func theAddressStartKeptCountsBookmarks() {
+        var places = [
+            visit("https://studio.example/", title: "Studio", count: 2),
+            visit("https://studio.example/often", title: "Often", count: 4),
+            visit("https://studio.example/saved", title: "Saved", count: 3),
+        ]
+        for page in ["upload", "library", "analytics", "comments", "settings"] {
+            places.append(visit("https://other.example/studio/" + page, title: page.capitalized, count: 50))
+        }
+        let history = History(places)
+        history.keep(bookmarks: [.site("Saved", URL(string: "https://studio.example/saved")!)], revision: 1)
+        let rows = history.suggestions(for: "studio", now: now)
+        #expect(rows.last?.key == "studio.example/saved")
+        #expect(rows.filter { $0.key.hasPrefix("studio") }.count == 1)
+    }
+
     /// A word written with escapes in the address is found as typed.
     @Test func anEscapedWordIsFoundAsTyped() {
         let history = History([visit("https://site.example/caf%C3%A9/menu", title: "Menu")])

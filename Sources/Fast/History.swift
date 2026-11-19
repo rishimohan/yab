@@ -1317,22 +1317,59 @@ final class History: ObservableObject {
         // pages matched only by their titles' or paths' words were seen:
         // "studio" is still studio.example with five busy pages under
         // other.example/studio/. Looked for only when none is shown, and
-        // in the places by address rather than in `found`, which leaves
-        // out what couldn't reach the few.
+        // in the places themselves rather than in `found`, which leaves out
+        // what couldn't reach the few. A site's own row and a bookmarked
+        // page are scored a little higher than their visits say, so they
+        // are looked at first, the one by its address and the other from
+        // the bookmarks; any other place scores what its visits say, and
+        // a host's places come best first, so a host is looked through
+        // only as far as one could still beat the best so far. A path
+        // looks at the addresses that begin with it when there are few.
         func addressStart() -> (score: Double, at: Int)? {
-            var best = found.filter { $0.at < 0 && $0.at > History.markBase && key($0.at).hasPrefix(needle) }.max { better($1, $0) }
-            var low = 0, high = addressOrder.count
-            while low < high {
-                let middle = low + (high - low) / 2
-                if entries[addressOrder[middle]].visit.key < needle { low = middle + 1 } else { high = middle }
-            }
-            while low < addressOrder.count, entries[addressOrder[low]].visit.key.hasPrefix(needle) {
-                let at = addressOrder[low]
+            // Known sites and bookmarks not been to: never left out of `found`.
+            var best = found.filter { $0.at < 0 && key($0.at).hasPrefix(needle) }.max { better($1, $0) }
+            func consider(_ at: Int) {
                 let entry = entries[at]
-                low += 1
-                guard URL(string: entry.visit.url) != nil else { continue }
+                guard entry.visit.key.hasPrefix(needle), URL(string: entry.visit.url) != nil else { return }
                 let one = (score: 10 + frecency(entry.visit, now: now) + mark(at) + (entry.room ? 0 : 1.5), at: at)
                 if best.map({ better(one, $0) }) ?? true { best = one }
+            }
+            func walk(_ group: [Int]) {
+                for at in group {
+                    if let best, 10 + entries[at].sortScore * scoreScale < best.score { break }
+                    consider(at)
+                }
+            }
+            func first(atOrAfter address: String) -> Int {
+                var low = 0, high = addressOrder.count
+                while low < high {
+                    let middle = low + (high - low) / 2
+                    if entries[addressOrder[middle]].visit.key < address { low = middle + 1 } else { high = middle }
+                }
+                return low
+            }
+            for (at, place) in seen.enumerated() where place >= 0 && marks.indices.contains(at) { consider(place) }
+            if let slash = needle.firstIndex(of: "/") {
+                guard let group = hostGroups[String(needle[..<slash])] else { return best }
+                var position = first(atOrAfter: needle)
+                var few: [Int] = []
+                while position < addressOrder.count, few.count <= 64, entries[addressOrder[position]].visit.key.hasPrefix(needle) {
+                    few.append(addressOrder[position])
+                    position += 1
+                }
+                if few.count > 64 { walk(group) } else { few.forEach(consider) }
+            } else {
+                // Without a slash, an address begins with the words when
+                // its host does: every place at such a host is one, its
+                // own row first.
+                let needs = History.letters(needle)
+                for (letters, group) in hostList where needs & ~letters == 0 {
+                    guard let any = group.first, entries[any].host.hasPrefix(needle) else { continue }
+                    let host = entries[any].host
+                    let position = first(atOrAfter: host)
+                    if position < addressOrder.count, entries[addressOrder[position]].visit.key == host { consider(addressOrder[position]) }
+                    walk(group)
+                }
             }
             return best
         }
