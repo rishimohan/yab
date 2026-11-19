@@ -1316,10 +1316,28 @@ final class History: ObservableObject {
         // finishes (completion), so it stays among the few however often
         // pages matched only by their titles' or paths' words were seen:
         // "studio" is still studio.example with five busy pages under
-        // other.example/studio/. Looked for only when none is shown.
+        // other.example/studio/. Looked for only when none is shown, and
+        // in the places by address rather than in `found`, which leaves
+        // out what couldn't reach the few.
+        func addressStart() -> (score: Double, at: Int)? {
+            var best = found.filter { $0.at < 0 && $0.at > History.markBase && key($0.at).hasPrefix(needle) }.max { better($1, $0) }
+            var low = 0, high = addressOrder.count
+            while low < high {
+                let middle = low + (high - low) / 2
+                if entries[addressOrder[middle]].visit.key < needle { low = middle + 1 } else { high = middle }
+            }
+            while low < addressOrder.count, entries[addressOrder[low]].visit.key.hasPrefix(needle) {
+                let at = addressOrder[low]
+                let entry = entries[at]
+                low += 1
+                guard URL(string: entry.visit.url) != nil else { continue }
+                let one = (score: 10 + frecency(entry.visit, now: now) + mark(at) + (entry.room ? 0 : 1.5), at: at)
+                if best.map({ better(one, $0) }) ?? true { best = one }
+            }
+            return best
+        }
         if limit > 0, !offers.contains(where: { $0.isPlace && $0.key.hasPrefix(needle) }),
-           let start = found.filter({ key($0.at).hasPrefix(needle) }).max(by: { better($1, $0) }),
-           let made = offer(start.at) {
+           let start = addressStart(), let made = offer(start.at) {
             if offers.count == limit { offers.removeLast() }
             offers.append(made)
         }
