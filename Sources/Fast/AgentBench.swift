@@ -73,6 +73,10 @@ extension Bench {
                 answer(stopped)
                 return
             }
+            if let failed = Self.agentLoadFailure(verb, page) {
+                answer(failed)
+                return
+            }
         }
         // While an agent sets up mail, the password it made is hidden from it.
         let guarded = MailSetup.shared.guarded(verb, session: request["session"] as? String, answer)
@@ -119,6 +123,23 @@ extension Bench {
         return ["error": StuckWatch.memoryStopped + ". Don't reload or reopen this page in this task. Tell the user the page used too much memory; they can choose Try Again themselves, or you can work at another address.",
                 "code": "PAGE_STOPPED_FOR_MEMORY", "url": tab.address?.absoluteString ?? ""]
     }
+
+    /// A page that never arrived (no such host, a refused connection,
+    /// offline) has no document to read or act in: a script sent there
+    /// never answered, and the call waited out its 25 s as if Yab were
+    /// slow. Said at once instead, with the address, so a wrong address
+    /// reads as one. Going elsewhere, back or again stays open.
+    static func agentLoadFailure(_ verb: String, _ tab: Tab) -> [String: Any]? {
+        guard let failure = tab.failure, failure != StuckWatch.memoryStopped, !tab.loading,
+              loadFailureReaders.contains(verb) else { return nil }
+        let address = tab.address?.absoluteString ?? "this address"
+        return ["error": "\(address) didn't load: \(failure). Check the address; navigate this tab (\(Bench.short(tab))) somewhere else or reload it.",
+                "code": "PAGE_LOAD_FAILED", "url": address]
+    }
+
+    /// What needs the page's document: refused on a page that never arrived.
+    static let loadFailureReaders: Set<String> = ["snapshot", "settle", "act", "press", "agent-act", "agent-read", "agent-fetch",
+                                                  "agent-eval", "agent-eval-held", "agent-upload", "agent-download", "agent-pdf"]
 
     /// Every verb agentCommand knows, by area, each in its own file.
     static let agentHandlers: [String: AgentHandler] = {
