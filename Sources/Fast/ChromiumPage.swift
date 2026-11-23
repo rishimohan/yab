@@ -1772,10 +1772,16 @@ final class ChromiumPage: YabTextCheckingView, PageHandle, PageAudioControl {
                                                   "scale": .number(min(1, 16_000 / max(height * (window?.backingScaleFactor ?? 2), 1)))])
                 }
                 let value = try await core.request("page.snapshot", params: parameters)
+                // Yab's own copy of the scroll lags the page's by a report
+                // (at most every 100 ms, from a frame): one landing while an
+                // agent's picture was drawn failed it, though the picture
+                // showed the page after the scroll.
                 guard !retired, remoteID == id, documentTurn == turn, bounds.size == size,
-                      pageZoom == zoom, magnification == magnify, url == location, tab?.lastY == scroll else { throw PageShotFailed() }
+                      pageZoom == zoom, magnification == magnify, url == location,
+                      shot.keeps(scroll: scroll, tab?.lastY) else { throw PageShotFailed() }
                 guard let encoded = value["data"].string else { throw PageShotFailed() }
-                if !beyond, format == "jpeg", rect == CGRect(origin: .zero, size: size) {
+                // Kept only under the scroll it was taken at.
+                if !beyond, format == "jpeg", rect == CGRect(origin: .zero, size: size), tab?.lastY == scroll {
                     keepRecentWhole(encoded, turn: turn, size: size, zoom: zoom, magnification: magnify, url: location, y: scroll)
                 }
                 let width = shot.width ?? rect.width
