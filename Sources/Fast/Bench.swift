@@ -9772,7 +9772,8 @@ final class Bench {
     }
 
     func missing(_ request: [String: Any]) -> [String: Any] {
-        ["error": "no tab “\(request["id"] as? String ?? "")”, see tabs"]
+        let ref = request["id"] as? String ?? ""
+        return ["error": AgentTabCleanup.shared.closedNote(ref) ?? "no tab “\(ref)”, see tabs"]
     }
 
     /// The space's name over the column's rows (SpaceName), on the screen

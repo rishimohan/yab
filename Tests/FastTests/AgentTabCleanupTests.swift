@@ -302,6 +302,26 @@ struct AgentTabCleanupTests {
         #expect(external.state == .attached)
     }
 
+    @Test func aTabTheCleanupClosedSaysSoWhenAskedFor() {
+        let w = World(); defer { w.dispose() }
+        let browser = w.browser(), external = w.task(state: .attached, cli: "external")
+        let tab = w.tab(external, in: browser), kept = w.tab(external, in: browser)
+        let ref = String(tab.id.uuidString.prefix(8)).lowercased()
+        #expect(w.cleanup.closedNote(ref) == nil)
+        w.cleanup.lookAround()
+        w.advance(600)
+        w.cleanup.acted(kept)
+        w.advance(300)
+        #expect(!browser.tabs.contains { $0 === tab })
+        let note = w.cleanup.closedNote(ref)
+        #expect(note?.hasPrefix("Yab closed tab “\(ref)”") == true)
+        #expect(note?.contains("after 15 min without a call there") == true)
+        #expect(note?.hasSuffix("open it again") == true)
+        // A tab still open, and one nobody closed, are as before.
+        #expect(w.cleanup.closedNote(String(kept.id.uuidString.prefix(8))) == nil)
+        #expect(w.cleanup.closedNote("") == nil)
+    }
+
     @Test func anAttachedAgentThatLeavesGivesItsTabsAFreshWait() {
         let w = World(); defer { w.dispose() }
         let browser = w.browser(), external = w.task(state: .attached, cli: "external")
