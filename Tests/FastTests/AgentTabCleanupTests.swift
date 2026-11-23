@@ -377,8 +377,14 @@ struct AgentTabCleanupTests {
         w.cleanup.schedule(task, immediate: true)
         #expect(browser.tabs.contains { $0 === seen })
         #expect(!browser.tabs.contains { $0 === hidden })
+        // Closed because the subagent finished, not for a wait it never had.
+        let gone = w.cleanup.closedNote(String(hidden.id.uuidString.prefix(8)))
+        #expect(gone?.contains("when the subagent that opened it finished") == true)
+        #expect(gone?.contains("min") == false)
         browser.activeID = nil; w.cleanup.lookAround(); w.advance()
         #expect(browser.tabs.isEmpty)
+        // The one kept while seen waited the full interval before it went.
+        #expect(w.cleanup.closedNote(String(seen.id.uuidString.prefix(8)))?.contains("after 15 min without a call there") == true)
     }
 
     @Test func privatePagesLeaveNoRecentlyClosedEntry() {
