@@ -129,10 +129,14 @@ final class AgentFiles {
     /// an app without Files and Folders access see a file in Documents,
     /// Desktop or Downloads (its name, its size) but not read it: the page
     /// was given a File it couldn't open, NotReadableError, while upload
-    /// said it was done (lino-b0, a CSV in ~/Documents).
+    /// said it was done (#1090, a CSV in ~/Documents). Only a regular file
+    /// is opened: a named pipe's open would wait for a writer forever.
     nonisolated static func unreadable(_ path: String) -> String? {
         let name = (path as NSString).lastPathComponent
-        let fd = open(path, O_RDONLY)
+        var info = stat()
+        guard stat(path, &info) == 0 else { return "\(name) can't be read (\(String(cString: strerror(errno)))). Don't say it was uploaded" }
+        guard info.st_mode & S_IFMT == S_IFREG else { return "\(name) isn't a file Yab can upload (a pipe, a device or a socket)" }
+        let fd = open(path, O_RDONLY | O_NONBLOCK)
         var failure = fd < 0 ? errno : 0
         if fd >= 0 {
             var byte: UInt8 = 0

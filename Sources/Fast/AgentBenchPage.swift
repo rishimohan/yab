@@ -544,9 +544,13 @@ extension Bench {
         // Each file read once off the main thread before anything is asked
         // or given (AgentFiles.unreadable): in a folder macOS hasn't asked
         // about yet, the open waits on the person's answer to its question.
+        // The task's permission as it was asked: a stop and resume while the
+        // read waits makes the task live again, not this request.
+        let admission = agents.session(session)?.admission
         let paths = files.map { $0.standardizedFileURL.resolvingSymlinksInPath().path }
         Task { @MainActor in
             let unreadable = await Task.detached { paths.lazy.compactMap(AgentFiles.unreadable).first }.value
+            guard admission?.valid ?? true else { answer(["error": "This task's permission expired."]); return }
             if let unreadable { answer(["error": unreadable]); return }
             guard let tab = own() else { return }
             uploadReadable(c, tab: tab, session: session, files: files)

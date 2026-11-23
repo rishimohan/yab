@@ -22,6 +22,12 @@ struct AgentUploadUnreadableTests {
         #expect(refused.hasPrefix("contacts.csv can't be read"))
         #expect(refused.contains("Don't say it was uploaded"))
 
+        // A named pipe would hold the read open until something writes to it.
+        let pipe = folder.appendingPathComponent("feed.csv").path
+        #expect(mkfifo(pipe, 0o644) == 0)
+        let piped = try #require(AgentFiles.unreadable(pipe))
+        #expect(piped.hasPrefix("feed.csv isn't a file Yab can upload"))
+
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         #expect(AgentFiles.privacyFolder(home + "/Documents/a/b.csv") == "your Documents folder")
         #expect(AgentFiles.privacyFolder(home + "/Desktop/b.csv") == "your Desktop folder")
